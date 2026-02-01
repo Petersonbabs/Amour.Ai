@@ -49,7 +49,7 @@ export function Login() {
                             },
                         },
                     }}
-                    providers={['google', 'apple']}
+                    providers={['google']}
                     redirectTo={`${window.location.origin}/create`}
                     onlyThirdPartyProviders={false}
                 />
