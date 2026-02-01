@@ -1,0 +1,134 @@
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer base {
+  :root {
+    --color-romantic-bg: #FFF5F5;
+    --color-romantic-red: #8B1E3F;
+    --color-romantic-gold: #D4AF37;
+    --color-romantic-text: #4A4A4A;
+    --color-romantic-paper: #FFFCF9;
+  }
+
+  body {
+    background-color: var(--color-romantic-bg);
+    color: var(--color-romantic-text);
+    font-family: 'Lato', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Playfair Display', serif;
+  }
+}
+
+@media print {
+
+  /* Hide everything by default */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Make the main content container and its children visible */
+  #root,
+  #root * {
+    visibility: visible;
+  }
+
+  /* Hide specific UI elements */
+  nav,
+  button,
+  a,
+  [role="button"],
+  .sidebar,
+  .bg-\[\#FFF5F5\],
+  .fixed,
+  .absolute.inset-0,
+  .grid>div:nth-child(2) {
+    display: none !important;
+  }
+
+  /* Reset layout for print */
+  .min-h-screen {
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+
+  .max-w-4xl {
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
+  .grid {
+    display: block !important;
+  }
+
+  .md\:col-span-8 {
+    width: 100% !important;
+  }
+
+  /* Hide the success header "It's ready" for print */
+  .text-center.mb-12:first-child {
+    display: none !important;
+  }
+
+  /* Hide toast container */
+  .fixed.bottom-6 {
+    display: none !important;
+  }
+
+  /* Ensure the letter card looks like paper */
+  .bg-white {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Force text color */
+  p,
+  h1,
+  h2,
+  div {
+    color: black !important;
+    text-shadow: none !important;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #E5E5E5;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #D4D4D4;
+}
+
+/* Paper Texture Effect */
+.paper-texture {
+  background-color: var(--color-romantic-paper);
+  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%239C92AC' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E");
+}
