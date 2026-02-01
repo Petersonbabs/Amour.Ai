@@ -14,7 +14,6 @@ serve(async (req) => {
     }
 
     try {
-        console.log("creating client...");
         const apiKey = Deno.env.get('GEMINI_API_KEY')
 
         if (!apiKey) {
@@ -24,13 +23,12 @@ serve(async (req) => {
         let body;
         try {
             const rawBody = await req.text();
-            console.log("Raw Request Body:", rawBody);
             body = JSON.parse(rawBody);
         } catch (e) {
             console.error("Failed to parse request body:", e);
             throw new Error("Invalid JSON body");
         }
-        const { transaction_id, prompt_data } = body;
+        const { transaction_id, prompt_data, currency, amount_paid, base_amount_usd } = body;
 
         // 1. Verify Payment with Flutterwave
         const flwSecretKey = Deno.env.get('FLUTTERWAVE_SECRET_KEY')
@@ -45,10 +43,17 @@ serve(async (req) => {
         let flwData;
         try {
             const rawFlw = await flwResponse.text();
+            const verification = await flwResponse.json();
+            if (verification.data.currency !== currency) {
+                throw new Error(`Currency mismatch: Expected ${currency}, got ${verification.data.currency}`);
+            }
+
+            if (parseFloat(verification.data.amount) !== amount_paid) {
+                throw new Error(`Amount mismatch: Expected ${amount_paid} ${currency}, got ${verification.data.amount}`);
+            }
             // parsing
             flwData = JSON.parse(rawFlw);
         } catch (e) {
-            console.log("Flutterwave raw response (not JSON):", await flwResponse.clone().text());
             throw new Error("Flutterwave returned non-JSON");
         }
 
@@ -93,8 +98,22 @@ serve(async (req) => {
         }
 
         return new Response(
-            JSON.stringify({ success: true, letter: text }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            JSON.stringify({
+                success: true,
+                letter: text,
+                currency_info: {
+                    original_currency: currency,
+                    amount_paid,
+                    base_amount_usd,
+                    exchange_rate: amount_paid / base_amount_usd
+                }
+            }),
+            {
+                headers: {
+                    ...corsHeaders,
+                    'Content-Type': 'application/json'
+                }
+            }
         )
 
     } catch (error) {
