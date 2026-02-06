@@ -259,7 +259,7 @@ export function Payment() {
 
         {/* Currency Selection */}
         <div className="mb-6 bg-[#FAFAFA] rounded-xl p-4 border border-[#E5E5E5]">
-          <div className="flex items-center justify-between mb-3">
+          {/* <div className="flex items-center justify-between mb-3">
             <div className="flex items-center">
               <Globe className="w-4 h-4 text-[#666] mr-2" />
               <span className="font-medium text-[#2A2A2A]">Payment Currency</span>
@@ -271,9 +271,9 @@ export function Payment() {
                 Detected: {SUPPORTED_CURRENCIES[userCurrency].country}
               </span>
             )}
-          </div>
+          </div> */}
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-center justify-between">
             <div className="text-sm">
               <span className="text-[#666] mr-2">Base amount:</span>
               <span className="font-medium">${BASE_AMOUNT_USD} USD</span>
@@ -295,27 +295,13 @@ export function Payment() {
         </div>
 
         <div className="bg-[#FAFAFA] rounded-xl p-6 mb-8 border border-[#E5E5E5]">
-          <div className="flex justify-between items-center mb-4 pb-4 border-b border-[#E5E5E5]">
+          <div className="flex flex-col sm:flex-col justify-between items-center mb-4 pb-4 border-b border-[#E5E5E5]">
             <span className="font-medium text-[#2A2A2A]">Love Letter Generation</span>
-            <span className="font-bold text-[#2A2A2A] text-xl">
+            <span className="font-bold text-[#2A2A2A] text-2xl">
               {formatCurrency(convertedAmount, userCurrency)}
             </span>
           </div>
 
-          <div className="space-y-2 hidden">
-            <div className="flex items-center text-sm text-[#666]">
-              <CheckCircle className="w-4 h-4 text-[#8B1E3F] mr-2 flex-shrink-0" />
-              AI-Enhanced Writing (Gemini Pro)
-            </div>
-            <div className="flex items-center text-sm text-[#666]">
-              <CheckCircle className="w-4 h-4 text-[#8B1E3F] mr-2 flex-shrink-0" />
-              {SUPPORTED_CURRENCIES[userCurrency].country} Currency
-            </div>
-            <div className="flex items-center text-sm text-[#666]">
-              <CheckCircle className="w-4 h-4 text-[#8B1E3F] mr-2 flex-shrink-0" />
-              Secure Flutterwave Payment
-            </div>
-          </div>
 
           {userCurrency !== 'USD' && (
             <div className="mt-3 pt-3 border-t border-[#E5E5E5]">

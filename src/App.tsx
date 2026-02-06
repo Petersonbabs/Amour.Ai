@@ -9,6 +9,7 @@ import { Create } from './pages/Create';
 import { Preview } from './pages/Preview';
 import { Payment } from './pages/Payment';
 import { Result } from './pages/Result';
+import { Profile } from './pages/Profile';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -34,6 +35,7 @@ export function App() {
               <Route path="preview" element={<Preview />} />
               <Route path="payment" element={<Payment />} />
               <Route path="result" element={<Result />} />
+              <Route path="profile" element={<Profile />} />
               <Route path="*" element={<Landing />} />
             </Route>
           </Routes>
