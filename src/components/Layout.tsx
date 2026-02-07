@@ -30,10 +30,10 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FFF5F5] overflow-hidden">
+    <div className="min-h-screen  flex flex-col bg-[#FFF5F5] overflow-hidden">
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#FFF5F5]/80 backdrop-blur-md border-b border-white/20">
-        <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
+        <div className="max-w-6xl border-b mx-auto px-6 h-20 flex items-center justify-between">
           <Link to="/" className="flex items-center space-x-2 group">
             <div className="relative">
               <Heart className="w-6 h-6 text-[#8B1E3F] fill-[#8B1E3F]" />

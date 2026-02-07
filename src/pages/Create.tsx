@@ -97,13 +97,13 @@ export function Create() {
     desc: 'Lyrical, timeless, and sophisticated.'
   }];
 
-  return <div className="min-h-[80vh] flex items-center justify-center px-6 py-12">
+  return <div className="min-h-[80vh] flex items-center justify-center px-2 md:px-6 py-4 md:py-8">
     <div className="w-full max-w-2xl">
       {/* Progress Bar */}
-      <div className="mb-12">
+      <div className="md:mb-12 mb-4">
         <div className="flex justify-between text-xs uppercase tracking-widest text-[#999] mb-4">
           <span className={step >= 1 ? 'text-[#8B1E3F]' : ''}>
-            The Basics
+            Basics
           </span>
           <span className={step >= 3 ? 'text-[#8B1E3F]' : ''}>Memories</span>
           <span className={step >= 4 ? 'text-[#8B1E3F]' : ''}>Tone</span>
@@ -120,7 +120,7 @@ export function Create() {
       </div>
 
       {/* Form Content */}
-      <div className="bg-white p-8 md:p-12 rounded-3xl shadow-xl shadow-[#8B1E3F]/5 border border-[#E5E5E5]/50 relative overflow-hidden">
+      <div className="bg-white px-4 py-8 md:p-12 rounded-3xl shadow-xl shadow-[#8B1E3F]/5 border border-[#E5E5E5]/50 relative overflow-hidden">
         {/* Decorative background blur */}
         <div className="absolute -top-20 -right-20 w-64 h-64 bg-[#FFF5F5] rounded-full blur-3xl opacity-50 pointer-events-none" />
 
@@ -280,12 +280,14 @@ export function Create() {
         </AnimatePresence>
 
         {/* Navigation Buttons */}
-        <div className="flex items-center justify-between mt-10 pt-6 border-t border-[#E5E5E5]">
-          <Button variant="ghost" onClick={handleBack} disabled={step === 1 || isGenerating} className={step === 1 ? 'invisible' : ''}>
+        <div className="flex items-center justify-between gap-6 mt-10 pt-6  border-t border-[#E5E5E5]">
+          {/* <Button variant="ghost" onClick={handleBack} disabled={step === 1 || isGenerating} className={step === 1 ? 'invisible' : ''}>
+          </Button> */}
+          <button onClick={handleBack} disabled={step === 1 || isGenerating} className={step === 1 ? 'hidden' : '' + "min-w-fit flex items-center"}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
-          </Button>
+          </button>
 
-          <Button onClick={handleNext} isLoading={isGenerating} className="min-w-[140px]">
+          <Button onClick={handleNext} isLoading={isGenerating} className="min-w-fit w-full">
             {step === 4 ? isGenerating ? 'Crafting...' : 'Create Letter' : 'Continue'}
             {!isGenerating && step !== 4 && <ArrowRight className="w-4 h-4 ml-2" />}
           </Button>
