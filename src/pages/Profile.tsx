@@ -24,6 +24,9 @@ export function Profile() {
     const navigate = useNavigate();
     const { toast } = useToast();
 
+    console.log(user);
+
+
     // Currency Hook
     const {
         userCurrency,
@@ -94,11 +97,13 @@ export function Profile() {
     const handleFlutterwavePayment = useFlutterwave(config);
 
     const handleSuccess = async (response: any) => {
+        console.log("Flutterwave Payment Success:", response);
         closePaymentModal();
-        if (response.status === 'successful') {
+
+        if (response.status === 'completed') {
             try {
                 // Call verify-payment with NULL prompt_data to just subscribe
-                const { error } = await supabase.functions.invoke('verify-payment', {
+                const { data, error } = await supabase.functions.invoke('verify-payment', {
                     body: {
                         transaction_id: response.transaction_id,
                         prompt_data: null,
@@ -108,17 +113,36 @@ export function Profile() {
                     }
                 });
 
-                if (error) throw error;
+                if (error) {
+                    console.error("Supabase Invoke Error:", error);
+                    throw error;
+                }
+
+                if (data && !data.success) {
+                    console.error("Backend Verification Error:", data);
+                    throw new Error(data.error || 'Payment verification failed on server');
+                }
+
+                // Optimistically update user state to show Premium immediately
+                if (user) {
+                    const updatedUser = {
+                        ...user,
+                        user_metadata: {
+                            ...user.user_metadata,
+                            isSubscribed: true
+                        }
+                    };
+                    setUser(updatedUser as User);
+                }
 
                 toast('Welcome to Premium! You can now generate unlimited letters.', 'success');
 
-                // Refresh Profile and Session
-                const { data } = await supabase.auth.refreshSession();
-                setUser(data.session?.user || null);
+                // Refresh Profile and Session in background to ensure persistence
+                await supabase.auth.refreshSession();
 
-            } catch (err) {
-                console.error(err);
-                toast('Payment successful but verification failed. Please contact support.', 'error');
+            } catch (err: any) {
+                console.error("Handle Success Error:", err);
+                toast(`Verification failed: ${err.message || 'Unknown error'}`, 'error');
             }
         }
     };

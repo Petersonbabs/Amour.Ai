@@ -15,7 +15,6 @@ serve(async (req) => {
 
     try {
         const apiKey = Deno.env.get('GEMINI_API_KEY')
-
         if (!apiKey) {
             throw new Error('GEMINI_API_KEY not found')
         }
@@ -30,13 +29,23 @@ serve(async (req) => {
         }
         const { transaction_id, prompt_data, currency, amount_paid, base_amount_usd } = body;
 
-        // Initialize Supabase Client
+        // Initialize Supabase Client (User Context)
         const soupBaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_ANON_KEY') ?? '',
             { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
         )
-        const { data: { user } } = await soupBaseClient.auth.getUser()
+        // Initialize Supabase Admin Client (Service Role)
+        const supabaseAdmin = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        )
+
+        const { data: { user }, error: userError } = await soupBaseClient.auth.getUser()
+
+        if (userError || !user) {
+            throw new Error("Invalid user token");
+        }
 
         const isSubscribed = user?.user_metadata?.isSubscribed;
 
@@ -57,23 +66,32 @@ serve(async (req) => {
 
             let flwData;
             try {
-                const rawFlw = await flwResponse.text();
-                const verification = await flwResponse.json();
+                if (!flwResponse.ok) {
+                    const errorText = await flwResponse.text();
+                    throw new Error(`Flutterwave API returned ${flwResponse.status}: ${errorText}`);
+                }
+
+                // Use .json() directly to avoid potential body consumption issues with .text() + JSON.parse()
+                flwData = await flwResponse.json();
+
+                const verification = flwData;
+
                 if (verification.data.currency !== currency) {
                     throw new Error(`Currency mismatch: Expected ${currency}, got ${verification.data.currency}`);
                 }
 
-                if (parseFloat(verification.data.amount) !== amount_paid) {
+                // Loose check on amount (>= expected)
+                if (parseFloat(verification.data.amount) < amount_paid) {
                     throw new Error(`Amount mismatch: Expected ${amount_paid} ${currency}, got ${verification.data.amount}`);
                 }
-                // parsing
-                flwData = JSON.parse(rawFlw);
-            } catch (e) {
-                throw new Error("Flutterwave returned non-JSON: " + e.message);
+
+            } catch (e: any) {
+                if (e.message.includes("Currency") || e.message.includes("Amount")) throw e;
+                throw new Error("FLW_VERIFY_ERROR: " + e.message);
             }
 
             if (flwData.status !== 'success' || flwData.data.status !== 'successful') {
-                throw new Error('Payment verification failed')
+                throw new Error('Payment verification failed status check')
             }
         }
 
@@ -81,7 +99,7 @@ serve(async (req) => {
         let text = null;
         if (prompt_data) {
             const google = createGoogleGenerativeAI({
-                apiKey: Deno.env.get('GEMINI_API_KEY')
+                apiKey: apiKey
             });
 
             const prompt = `Write a ${prompt_data.tone} love letter for my ${prompt_data.relationship}, ${prompt_data.partnerName}.
@@ -100,8 +118,6 @@ serve(async (req) => {
         }
 
         // 3. Save to Database
-        // soupBaseClient already initialized above
-
         if (user) {
             if (prompt_data && text) {
                 await soupBaseClient.from('letters').insert({
@@ -113,11 +129,19 @@ serve(async (req) => {
                 })
             }
 
-            // Update User Metadata (only if not already subscribed)
+            // Update User Metadata via Admin Client (Force Update)
             if (!isSubscribed) {
-                await soupBaseClient.auth.updateUser({
-                    data: { isSubscribed: true }
-                })
+                const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+                    user.id,
+                    { user_metadata: { ...user.user_metadata, isSubscribed: true } }
+                )
+                if (updateError) {
+                    console.error("Failed to update subscription:", updateError);
+                    // Don't throw here if payment was successful, just log it. 
+                    // Actually, if we don't update, they won't get premium. Better to throw or retry? 
+                    // Throwing might cause client to see error. Let's throw to be safe.
+                    throw new Error("Failed to update subscription status");
+                }
             }
         }
 
@@ -128,8 +152,7 @@ serve(async (req) => {
                 currency_info: {
                     original_currency: currency,
                     amount_paid,
-                    base_amount_usd,
-                    exchange_rate: amount_paid / base_amount_usd
+                    base_amount_usd
                 }
             }),
             {
@@ -140,10 +163,10 @@ serve(async (req) => {
             }
         )
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Context Error:", error);
         return new Response(
-            JSON.stringify({ success: false, error: error.message || "Unknown error", stack: error.stack }),
+            JSON.stringify({ success: false, error: error.message || "Unknown error" }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
         )
     }
