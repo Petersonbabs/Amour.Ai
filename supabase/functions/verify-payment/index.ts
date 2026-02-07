@@ -30,56 +30,7 @@ serve(async (req) => {
         }
         const { transaction_id, prompt_data, currency, amount_paid, base_amount_usd } = body;
 
-        // 1. Verify Payment with Flutterwave
-        const flwSecretKey = Deno.env.get('FLUTTERWAVE_SECRET_KEY')
-        const flwResponse = await fetch(`https://api.flutterwave.com/v3/transactions/${transaction_id}/verify`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${flwSecretKey}`,
-                'Content-Type': 'application/json'
-            }
-        })
-
-        let flwData;
-        try {
-            const rawFlw = await flwResponse.text();
-            const verification = await flwResponse.json();
-            if (verification.data.currency !== currency) {
-                throw new Error(`Currency mismatch: Expected ${currency}, got ${verification.data.currency}`);
-            }
-
-            if (parseFloat(verification.data.amount) !== amount_paid) {
-                throw new Error(`Amount mismatch: Expected ${amount_paid} ${currency}, got ${verification.data.amount}`);
-            }
-            // parsing
-            flwData = JSON.parse(rawFlw);
-        } catch (e) {
-            throw new Error("Flutterwave returned non-JSON");
-        }
-
-        if (flwData.status !== 'success' || flwData.data.status !== 'successful') {
-            throw new Error('Payment verification failed')
-        }
-
-        // 2. Generate Letter with Vercel AI SDK
-        const google = createGoogleGenerativeAI({
-            apiKey: Deno.env.get('GEMINI_API_KEY')
-        });
-
-        const prompt = `Write a ${prompt_data.tone} love letter for my ${prompt_data.relationship}, ${prompt_data.partnerName}.
-    My name is ${prompt_data.yourName || 'your secret admirer'}.
-    Our relationship duration: ${prompt_data.duration}.
-    Key memories: ${prompt_data.memories}.
-    What I love about them: ${prompt_data.qualities}.
-    
-    Make it deeply personal, emotional, and well-structured. Use markdown formatting. Sign it with my name at the end.`;
-
-        const { text } = await generateText({
-            model: google('models/gemini-flash-latest'),
-            prompt: prompt,
-        })
-
-        // 3. Save to Database
+        // Initialize Supabase Client
         const soupBaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -87,14 +38,87 @@ serve(async (req) => {
         )
         const { data: { user } } = await soupBaseClient.auth.getUser()
 
-        if (user) {
-            await soupBaseClient.from('letters').insert({
-                user_id: user.id,
-                content: text,
-                prompt_data: prompt_data,
-                is_paid: true,
-                transaction_ref: transaction_id,
+        const isSubscribed = user?.user_metadata?.isSubscribed;
+
+        // 1. Verify Payment with Flutterwave (only if not subscribed)
+        if (!isSubscribed) {
+            const flwSecretKey = Deno.env.get('FLUTTERWAVE_SECRET_KEY')
+            if (!transaction_id) {
+                throw new Error("Missing transaction_id and user is not subscribed");
+            }
+
+            const flwResponse = await fetch(`https://api.flutterwave.com/v3/transactions/${transaction_id}/verify`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${flwSecretKey}`,
+                    'Content-Type': 'application/json'
+                }
             })
+
+            let flwData;
+            try {
+                const rawFlw = await flwResponse.text();
+                const verification = await flwResponse.json();
+                if (verification.data.currency !== currency) {
+                    throw new Error(`Currency mismatch: Expected ${currency}, got ${verification.data.currency}`);
+                }
+
+                if (parseFloat(verification.data.amount) !== amount_paid) {
+                    throw new Error(`Amount mismatch: Expected ${amount_paid} ${currency}, got ${verification.data.amount}`);
+                }
+                // parsing
+                flwData = JSON.parse(rawFlw);
+            } catch (e) {
+                throw new Error("Flutterwave returned non-JSON: " + e.message);
+            }
+
+            if (flwData.status !== 'success' || flwData.data.status !== 'successful') {
+                throw new Error('Payment verification failed')
+            }
+        }
+
+        // 2. Generate Letter with Vercel AI SDK (Only if prompt_data provided)
+        let text = null;
+        if (prompt_data) {
+            const google = createGoogleGenerativeAI({
+                apiKey: Deno.env.get('GEMINI_API_KEY')
+            });
+
+            const prompt = `Write a ${prompt_data.tone} love letter for my ${prompt_data.relationship}, ${prompt_data.partnerName}.
+        My name is ${prompt_data.yourName || 'your secret admirer'}.
+        Our relationship duration: ${prompt_data.duration}.
+        Key memories: ${prompt_data.memories}.
+        What I love about them: ${prompt_data.qualities}.
+        
+        Make it deeply personal, emotional, and well-structured. Use markdown formatting. Sign it with my name at the end.`;
+
+            const { text: generatedText } = await generateText({
+                model: google('models/gemini-flash-latest'),
+                prompt: prompt,
+            })
+            text = generatedText;
+        }
+
+        // 3. Save to Database
+        // soupBaseClient already initialized above
+
+        if (user) {
+            if (prompt_data && text) {
+                await soupBaseClient.from('letters').insert({
+                    user_id: user.id,
+                    content: text,
+                    prompt_data: prompt_data,
+                    is_paid: true,
+                    transaction_ref: transaction_id || 'subscription',
+                })
+            }
+
+            // Update User Metadata (only if not already subscribed)
+            if (!isSubscribed) {
+                await soupBaseClient.auth.updateUser({
+                    data: { isSubscribed: true }
+                })
+            }
         }
 
         return new Response(

@@ -1,17 +1,98 @@
 import { motion } from 'framer-motion';
-import { Play,  Download, Share2, Heart, Copy } from 'lucide-react';
+import { Play, Pause, Square, Download, Share2, Heart, Copy, Volume2, Check } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useLocation } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
+import { useState, useEffect, useRef } from 'react';
 
 export function Result() {
   const { toast } = useToast();
-  // const [isPlaying, setIsPlaying] = useState(false);
   const location = useLocation();
   const { letter } = location.state || {};
 
+  // Voice State
+  const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('female');
+  const [voiceTone, setVoiceTone] = useState<'calm' | 'warm' | 'passionate'>('warm');
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [supported, setSupported] = useState(true);
+
+  const synth = useRef<SpeechSynthesis | null>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // Initialize Speech Synthesis
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      synth.current = window.speechSynthesis;
+      setSupported(true);
+    } else {
+      setSupported(false);
+    }
+
+    return () => {
+      if (synth.current) {
+        synth.current.cancel();
+      }
+    };
+  }, []);
+
+  const handlePlay = () => {
+    if (!synth.current) return;
+
+    if (isPlaying) {
+      synth.current.cancel();
+      setIsPlaying(false);
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(letter || "No content to play.");
+    utteranceRef.current = utterance;
+
+    // Select Voice based on Gender
+    const voices = synth.current.getVoices();
+    let selectedVoice = voices.find(v => v.lang.includes('en')); // Default
+
+    // Simple heuristic for gender (not perfect as API doesn't standardise gender)
+    // We look for names common in OS voices or keywords
+    const maleKeywords = ['david', 'james', 'mark', 'george', 'male', 'guy'];
+    const femaleKeywords = ['zira', 'samantha', 'victoria', 'female', 'girl', 'woman'];
+
+    if (voiceGender === 'male') {
+      selectedVoice = voices.find(v => maleKeywords.some(k => v.name.toLowerCase().includes(k)) && v.lang.includes('en')) || selectedVoice;
+    } else {
+      selectedVoice = voices.find(v => femaleKeywords.some(k => v.name.toLowerCase().includes(k)) && v.lang.includes('en')) || selectedVoice;
+    }
+
+    if (selectedVoice) utterance.voice = selectedVoice;
+
+    // Apply Tone (Pitch/Rate adjustments)
+    switch (voiceTone) {
+      case 'calm':
+        utterance.rate = 0.85;
+        utterance.pitch = 0.9;
+        break;
+      case 'passionate':
+        utterance.rate = 1.1; // Slightly faster to simulate excitement/flow? Or slower? 
+        // Let's try slightly faster but deeper? Or maybe varying? 
+        // "Passionate" is hard with simple TTS. Let's try a bit higher pitch.
+        utterance.pitch = 1.1;
+        break;
+      case 'warm':
+      default:
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        break;
+    }
+
+    utterance.onend = () => setIsPlaying(false);
+    utterance.onerror = () => setIsPlaying(false);
+
+    synth.current.speak(utterance);
+    setIsPlaying(true);
+  };
+
   // Parse markdown-like content into paragraphs if needed, or just display
   const content = letter || `As I sit here thinking about the last 5 years we've shared... (Demo Content)`;
+
   return <div className="min-h-screen py-12 px-6">
     <div className="max-w-4xl mx-auto">
       {/* Success Header */}
@@ -80,32 +161,90 @@ export function Result() {
           duration: 0.8,
           delay: 0.4
         }}>
-          {/* Audio Player Card */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-[#E5E5E5] relative overflow-hidden opacity-90">
-            <div className="absolute top-2 right-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm z-10">
-              COMING SOON
-            </div>
-
+          {/* Audio Player Card - Active */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-[#E5E5E5] relative overflow-hidden">
             <h3 className="font-medium text-[#2A2A2A] mb-4 flex items-center">
               Voice Message
-              <span className="ml-2 px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded border border-gray-200">AI Generated</span>
+              <span className="ml-2 px-1.5 py-0.5 bg-[#FFF0F5] text-[#8B1E3F] text-[10px] rounded border border-[#ffe4e6]">Preview</span>
             </h3>
-            <div className="bg-[#F8F8F8] rounded-xl p-4 flex items-center space-x-4 grayscale opacity-75 cursor-not-allowed">
-              <button disabled className="w-10 h-10 rounded-full bg-[#8B1E3F] text-white flex items-center justify-center">
-                <Play className="w-4 h-4 ml-0.5" />
-              </button>
-              <div className="flex-1 space-y-1">
-                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#8B1E3F] w-1/3" />
+
+            {/* Voice Controls */}
+            <div className="space-y-4 mb-6">
+              {/* Gender */}
+              <div>
+                <label className="text-xs text-[#999] uppercase tracking-wider font-semibold mb-2 block">Voice</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setVoiceGender('female')}
+                    className={`text-sm py-1.5 rounded-lg border transition-all ${voiceGender === 'female' ? 'bg-[#FFF5F5] border-[#8B1E3F] text-[#8B1E3F]' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                  >
+                    Female
+                  </button>
+                  <button
+                    onClick={() => setVoiceGender('male')}
+                    className={`text-sm py-1.5 rounded-lg border transition-all ${voiceGender === 'male' ? 'bg-[#FFF5F5] border-[#8B1E3F] text-[#8B1E3F]' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                  >
+                    Male
+                  </button>
                 </div>
-                <div className="flex justify-between text-[10px] text-[#999] uppercase tracking-wider">
-                  <span>0:00</span>
-                  <span>--:--</span>
+              </div>
+
+              {/* Tone */}
+              <div>
+                <label className="text-xs text-[#999] uppercase tracking-wider font-semibold mb-2 block">Tone</label>
+                <div className="flex gap-2">
+                  {(['calm', 'warm', 'passionate'] as const).map(tone => (
+                    <button
+                      key={tone}
+                      onClick={() => setVoiceTone(tone)}
+                      className={`flex-1 text-xs py-1.5 rounded-lg border transition-all ${voiceTone === tone ? 'bg-[#FFF5F5] border-[#8B1E3F] text-[#8B1E3F]' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                    >
+                      {tone.charAt(0).toUpperCase() + tone.slice(1)}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
 
-            <p className="text-xs text-gray-400 mt-2 text-center font-medium">Auto-composed song featuring your voice clone.</p>
+            <div className="bg-[#FAFAFA] rounded-xl p-4 flex items-center space-x-4 border border-[#F0F0F0]">
+              <button
+                onClick={handlePlay}
+                disabled={!supported}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isPlaying ? 'bg-[#ffebef] text-[#8B1E3F]' : 'bg-[#8B1E3F] text-white hover:bg-[#701630] shadow-md shadow-[#8B1E3F]/20'} ${!supported ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {isPlaying ? <Square className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 ml-0.5" />}
+              </button>
+
+              <div className="flex-1">
+                {isPlaying ? (
+                  <div className="flex items-center space-x-1 h-8">
+                    {/* Audio Visualizer Animation */}
+                    {[...Array(5)].map((_, i) => (
+                      <motion.div
+                        key={i}
+                        className="w-1 bg-[#8B1E3F]/60 rounded-full"
+                        animate={{ height: ['20%', '100%', '20%'] }}
+                        transition={{
+                          duration: 0.8,
+                          repeat: Infinity,
+                          delay: i * 0.1,
+                          ease: "easeInOut"
+                        }}
+                      />
+                    ))}
+                    <span className="text-xs text-[#8B1E3F] ml-2 font-medium">Playing...</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-[#666]">
+                    {supported ? "Ready to play" : "Voice not supported"}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <p className="text-[10px] text-gray-400 mt-3 text-center">
+              This is a preview using your device's voice engine.
+            </p>
           </div>
 
           {/* Action Buttons */}

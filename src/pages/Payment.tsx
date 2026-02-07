@@ -48,6 +48,7 @@ export function Payment() {
   useEffect(() => {
     if (!formData) {
       navigate('/create');
+      return;
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -55,6 +56,12 @@ export function Payment() {
       if (!session) {
         toast('Please log in to continue', 'error');
         navigate('/login');
+        return;
+      }
+
+      // Check Subscription Status
+      if (session.user.user_metadata?.isSubscribed) {
+        generateLetterVerified(null);
       }
     });
 
@@ -62,171 +69,42 @@ export function Payment() {
     detectUserCurrency();
   }, [formData, navigate]);
 
-  // Function to detect user's currency
-  const detectUserCurrency = async () => {
+  const generateLetterVerified = async (transactionId: string | null) => {
+    setStatus('verifying');
     try {
-      // Method 1: Try using IP geolocation API
-      const geoResponse = await fetch('https://ipapi.co/json/');
-      const geoData = await geoResponse.json();
-
-      const countryCode = geoData.country_code;
-      const currencyCode = geoData.currency;
-
-      // Check if this currency is supported by Flutterwave
-      let selectedCurrency: CurrencyCode = 'USD'; // Default fallback
-
-      if (currencyCode && SUPPORTED_CURRENCIES[currencyCode as CurrencyCode]) {
-        selectedCurrency = currencyCode as CurrencyCode;
-      } else {
-        // Map country to currency if direct currency code not supported
-        const countryCurrencyMap: Record<string, CurrencyCode> = {
-          'NG': 'NGN',
-          'KE': 'KES',
-          'GH': 'GHS',
-          'UG': 'UGX',
-          'TZ': 'TZS',
-          'ZA': 'ZAR',
-          'US': 'USD',
-          'GB': 'GBP',
-          'CA': 'CAD',
-          'AU': 'AUD',
-          'DE': 'EUR',
-          'FR': 'EUR',
-          'IT': 'EUR',
-          'ES': 'EUR',
-        };
-
-        if (countryCode && countryCurrencyMap[countryCode]) {
-          selectedCurrency = countryCurrencyMap[countryCode];
-        }
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+      if (sessionError || !session) {
+        throw new Error("Session expired. Please sign in again.");
       }
 
-      // Get exchange rates
-      await fetchExchangeRates(selectedCurrency);
+      const { data, error } = await supabase.functions.invoke('verify-payment', {
+        body: {
+          transaction_id: transactionId,
+          prompt_data: formData,
+          currency: userCurrency, // Use current state, might be default USD if too fast
+          amount_paid: convertedAmount,
+          base_amount_usd: BASE_AMOUNT_USD
+        }
+      });
 
-    } catch (error) {
-      console.error('Failed to detect location:', error);
-      // Fallback to USD with default exchange rate
-      setUserCurrency('USD');
-      setConvertedAmount(BASE_AMOUNT_USD);
-    } finally {
-      setIsDetecting(false);
+      if (error) throw error;
+      if (data && (data.error || data.success === false)) {
+        throw new Error(data.error || "Generation failed");
+      }
+
+      navigate('/result', { state: { letter: data.letter } });
+
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage(err.message || "Something went wrong");
+      setStatus('error');
     }
   };
-
-  // Fetch exchange rates from an API
-  const fetchExchangeRates = async (targetCurrency: CurrencyCode) => {
-    try {
-      // Using a free exchange rate API
-      const response = await fetch(
-        `https://api.exchangerate-api.com/v4/latest/USD`
-      );
-      const data = await response.json();
-
-      setExchangeRates(data.rates);
-
-      // Calculate converted amount
-      const rate = data.rates[targetCurrency] || 1;
-      const amount = BASE_AMOUNT_USD * rate;
-
-      // Round to 2 decimal places
-      const roundedAmount = Math.round(amount * 100) / 100;
-
-      setUserCurrency(targetCurrency);
-      setConvertedAmount(roundedAmount);
-
-    } catch (error) {
-      console.error('Failed to fetch exchange rates:', error);
-      // Fallback rates (you should update these periodically)
-      const fallbackRates: Record<string, number> = {
-        NGN: 1500,  // Example: 1 USD = 1500 NGN
-        KES: 150,
-        GHS: 12,
-        EUR: 0.92,
-        GBP: 0.79,
-        CAD: 1.35,
-        AUD: 1.52,
-        USD: 1,
-      };
-
-      setExchangeRates(fallbackRates);
-      const amount = BASE_AMOUNT_USD * (fallbackRates[targetCurrency] || 1);
-      const roundedAmount = Math.round(amount * 100) / 100;
-
-      setUserCurrency(targetCurrency);
-      setConvertedAmount(roundedAmount);
-    }
-  };
-
-  // Format currency display
-  const formatCurrency = (amount: number, currency: CurrencyCode) => {
-    const currencyInfo = SUPPORTED_CURRENCIES[currency];
-    return `${currencyInfo.symbol}${amount.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  };
-
-  const config = {
-    public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY,
-    tx_ref: Date.now().toString(),
-    amount: convertedAmount,
-    currency: userCurrency,
-    payment_options: 'card,mobilemoney,ussd,banktransfer',
-    customer: {
-      email: userEmail || formData?.email || '',
-      phone_number: formData?.phone || '',
-      name: formData?.partnerName || 'Valued Customer',
-    },
-    customizations: {
-      title: 'Amour Love Letter',
-      description: 'Unlock your personalized masterpiece',
-      logo: 'https://st2.depositphotos.com/4403291/7418/v/450/depositphotos_74189661-stock-illustration-online-shop-log.jpg',
-    },
-  };
-
-  const handleFlutterwavePayment = useFlutterwave(config);
 
   const handleSuccess = async (response: any) => {
     closePaymentModal();
-
     if (response.status === 'successful') {
-      setStatus('verifying');
-
-      try {
-        const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
-        if (sessionError || !session) {
-          throw new Error("Session expired. Please sign in again.");
-        }
-
-        // Pass currency info to backend
-        const { data, error } = await supabase.functions.invoke('verify-payment', {
-          body: {
-            transaction_id: response.transaction_id,
-            prompt_data: formData,
-            currency: userCurrency,
-            amount_paid: convertedAmount,
-            base_amount_usd: BASE_AMOUNT_USD
-          }
-        });
-
-        if (error) {
-          if (error.code === 401 || error.context?.status === 401) {
-            throw new Error("Authentication failed. Please sign out and sign in again.");
-          }
-          throw error;
-        }
-
-        if (data && (data.error || data.success === false)) {
-          throw new Error(data.error || "Payment verification failed backend");
-        }
-
-        navigate('/result', { state: { letter: data.letter } });
-      } catch (err: any) {
-        console.error(err);
-        setErrorMessage(err.message || JSON.stringify(err));
-        setStatus('error');
-      }
+      await generateLetterVerified(response.transaction_id);
     }
   };
 

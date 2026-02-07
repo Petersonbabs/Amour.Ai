@@ -5,6 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import { User } from '@supabase/supabase-js';
 import { Heart, Clock, DollarSign, Calendar, ChevronRight } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { useFlutterwave, closePaymentModal } from 'flutterwave-react-v3';
+import { useCurrency, BASE_AMOUNT_USD } from '../hooks/useCurrency';
+import { useToast } from '../context/ToastContext';
 
 interface Letter {
     id: string;
@@ -19,6 +22,14 @@ export function Profile() {
     const [letters, setLetters] = useState<Letter[]>([]);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
+    const { toast } = useToast();
+
+    // Currency Hook
+    const {
+        userCurrency,
+        convertedAmount,
+        formatCurrency
+    } = useCurrency();
 
     useEffect(() => {
         fetchProfile();
@@ -61,6 +72,57 @@ export function Profile() {
         });
     };
 
+    // Flutterwave Configuration
+    const config = {
+        public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY,
+        tx_ref: Date.now().toString(),
+        amount: convertedAmount,
+        currency: userCurrency,
+        payment_options: 'card,mobilemoney,ussd,banktransfer',
+        customer: {
+            email: user?.email || '',
+            phone_number: '',
+            name: user?.user_metadata?.full_name || 'Valued Member',
+        },
+        customizations: {
+            title: 'Amour Premium',
+            description: 'Unlock unlimited letters',
+            logo: 'https://st2.depositphotos.com/4403291/7418/v/450/depositphotos_74189661-stock-illustration-online-shop-log.jpg',
+        },
+    };
+
+    const handleFlutterwavePayment = useFlutterwave(config);
+
+    const handleSuccess = async (response: any) => {
+        closePaymentModal();
+        if (response.status === 'successful') {
+            try {
+                // Call verify-payment with NULL prompt_data to just subscribe
+                const { error } = await supabase.functions.invoke('verify-payment', {
+                    body: {
+                        transaction_id: response.transaction_id,
+                        prompt_data: null,
+                        currency: userCurrency,
+                        amount_paid: convertedAmount,
+                        base_amount_usd: BASE_AMOUNT_USD
+                    }
+                });
+
+                if (error) throw error;
+
+                toast('Welcome to Premium! You can now generate unlimited letters.', 'success');
+
+                // Refresh Profile and Session
+                const { data } = await supabase.auth.refreshSession();
+                setUser(data.session?.user || null);
+
+            } catch (err) {
+                console.error(err);
+                toast('Payment successful but verification failed. Please contact support.', 'error');
+            }
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#FFF5F5]">
@@ -100,8 +162,8 @@ export function Profile() {
                         </h1>
                         <p className="text-[#666] mb-4">{user?.email}</p>
                         <div className="flex flex-wrap justify-center md:justify-start gap-3">
-                            <span className="px-3 py-1 bg-[#FFF5F5] text-[#8B1E3F] text-xs font-medium rounded-full border border-[#ffe4e6]">
-                                Standard Member
+                            <span className={`px-3 py-1 text-xs font-medium rounded-full border ${user?.user_metadata?.isSubscribed ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-[#FFF5F5] text-[#8B1E3F] border-[#ffe4e6]'}`}>
+                                {user?.user_metadata?.isSubscribed ? 'Premium Member' : 'Standard Member'}
                             </span>
                             <span className="px-3 py-1 bg-gray-50 text-gray-600 text-xs font-medium rounded-full border border-gray-100 flex items-center">
                                 <Clock className="w-3 h-3 mr-1" />
@@ -177,13 +239,17 @@ export function Profile() {
                         <div className="bg-white p-6 rounded-2xl border border-[#E5E5E5] space-y-4">
                             <div className="flex items-center justify-between pb-4 border-b border-[#E5E5E5]">
                                 <span className="font-medium text-[#4A4A4A]">Current Plan</span>
-                                <span className="text-[#8B1E3F] font-bold">Standard</span>
+                                <span className={`${user?.user_metadata?.isSubscribed ? 'text-amber-600' : 'text-[#8B1E3F]'} font-bold`}>
+                                    {user?.user_metadata?.isSubscribed ? 'Premium' : 'Standard'}
+                                </span>
                             </div>
 
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between text-sm">
                                     <span className="text-[#666]">Cost per letter</span>
-                                    <span className="font-medium text-[#2A2A2A]">Flexible</span>
+                                    <span className="font-medium text-[#2A2A2A]">
+                                        {user?.user_metadata?.isSubscribed ? 'Free' : formatCurrency(convertedAmount, userCurrency)}
+                                    </span>
                                 </div>
                                 <div className="flex items-center justify-between text-sm">
                                     <span className="text-[#666]">Letters Generated</span>
@@ -191,10 +257,30 @@ export function Profile() {
                                 </div>
                             </div>
 
-                            <div className="pt-4 mt-2">
+                            <div className="pt-4 mt-2 space-y-3">
                                 <Button variant="outline" className="w-full text-xs" onClick={() => navigate('/create')}>
                                     Generate New Letter
                                 </Button>
+
+                                {!user?.user_metadata?.isSubscribed && (
+                                    <div className="bg-[#FFF5F5] p-3 rounded-xl border border-[#ffe4e6]">
+                                        <p className="text-[10px] text-[#8B1E3F] mb-2 leading-relaxed">
+                                            Unlock Premium for <b>{formatCurrency(convertedAmount, userCurrency)}</b>. One-time payment.
+                                        </p>
+                                        <Button
+                                            variant="primary"
+                                            className="w-full text-xs h-8 bg-[#8B1E3F] hover:bg-[#701630] text-white"
+                                            onClick={() => {
+                                                handleFlutterwavePayment({
+                                                    callback: handleSuccess,
+                                                    onClose: () => { }
+                                                })
+                                            }}
+                                        >
+                                            Unlock Premium
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </motion.div>
