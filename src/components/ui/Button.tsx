@@ -1,10 +1,11 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, HTMLMotionProps } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost';
+interface ButtonProps extends HTMLMotionProps<"button"> {
+  variant?: 'primary' | 'secondary' | 'ghost' | "outline";
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
+  children?: React.ReactNode;
 }
 export function Button({
   children,
@@ -19,7 +20,8 @@ export function Button({
   const variants = {
     primary: 'bg-[#8B1E3F] text-white hover:bg-[#701630] shadow-lg shadow-[#8B1E3F]/20 focus:ring-[#8B1E3F]',
     secondary: 'bg-white text-[#8B1E3F] border border-[#E5E5E5] hover:border-[#8B1E3F]/30 hover:bg-[#FFF5F5] shadow-sm focus:ring-[#8B1E3F]',
-    ghost: 'bg-transparent text-[#666] hover:text-[#8B1E3F] hover:bg-[#8B1E3F]/5 focus:ring-[#8B1E3F]'
+    ghost: 'bg-transparent text-[#666] hover:text-[#8B1E3F] hover:bg-[#8B1E3F]/5 focus:ring-[#8B1E3F]',
+    outline: 'bg-transparent text-[#666] hover:text-[#8B1E3F] hover:bg-[#8B1E3F]/5 focus:ring-[#8B1E3F]'
   };
   const sizes = {
     sm: 'px-4 py-2 text-sm',
@@ -31,7 +33,7 @@ export function Button({
   }} whileTap={{
     scale: disabled || isLoading ? 1 : 0.98
   }} className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`} disabled={disabled || isLoading} {...props}>
-      {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-      {children}
-    </motion.button>;
+    {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+    {children}
+  </motion.button>;
 }

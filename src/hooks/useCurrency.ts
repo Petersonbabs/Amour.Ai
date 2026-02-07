@@ -142,6 +142,7 @@ export function useCurrency() {
         isDetecting,
         exchangeRates,
         formatCurrency,
-        fetchExchangeRates
+        fetchExchangeRates,
+        detectUserCurrency
     };
 }

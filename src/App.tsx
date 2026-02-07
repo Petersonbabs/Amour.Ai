@@ -10,6 +10,7 @@ import { Preview } from './pages/Preview';
 import { Payment } from './pages/Payment';
 import { Result } from './pages/Result';
 import { Profile } from './pages/Profile';
+import { Generating } from './pages/Generating';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -34,6 +35,7 @@ export function App() {
               <Route path="create" element={<Create />} />
               <Route path="preview" element={<Preview />} />
               <Route path="payment" element={<Payment />} />
+              <Route path="generating" element={<Generating />} />
               <Route path="result" element={<Result />} />
               <Route path="profile" element={<Profile />} />
               <Route path="*" element={<Landing />} />

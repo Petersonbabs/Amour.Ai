@@ -1,50 +1,35 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Lock, CheckCircle, AlertCircle, Globe } from 'lucide-react';
+import { Globe } from 'lucide-react';
 import { useFlutterwave, closePaymentModal } from 'flutterwave-react-v3';
 import { Button } from '../components/ui/Button';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
-
-// Currency data - supported currencies with their Flutterwave codes and conversion rates
-const SUPPORTED_CURRENCIES = {
-  // African countries
-  NGN: { country: 'Nigeria', symbol: '₦', name: 'Naira' },
-  KES: { country: 'Kenya', symbol: 'KSh', name: 'Kenyan Shilling' },
-  GHS: { country: 'Ghana', symbol: 'GH₵', name: 'Ghanaian Cedi' },
-  UGX: { country: 'Uganda', symbol: 'USh', name: 'Ugandan Shilling' },
-  TZS: { country: 'Tanzania', symbol: 'TSh', name: 'Tanzanian Shilling' },
-  ZAR: { country: 'South Africa', symbol: 'R', name: 'South African Rand' },
-  // Other regions
-  USD: { country: 'United States', symbol: '$', name: 'US Dollar' },
-  EUR: { country: 'European Union', symbol: '€', name: 'Euro' },
-  GBP: { country: 'United Kingdom', symbol: '£', name: 'British Pound' },
-  CAD: { country: 'Canada', symbol: 'C$', name: 'Canadian Dollar' },
-  AUD: { country: 'Australia', symbol: 'A$', name: 'Australian Dollar' },
-} as const;
-
-type CurrencyCode = keyof typeof SUPPORTED_CURRENCIES;
-
-// Base amount in USD
-const BASE_AMOUNT_USD = 0.10; // Example: $3 USD
+import { useCurrency, SUPPORTED_CURRENCIES, CurrencyCode, BASE_AMOUNT_USD } from '../hooks/useCurrency';
 
 export function Payment() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const location = useLocation();
-  const { formData } = location.state || {};
-  const [isProcessing, setIsProcessing] = useState(false);
+  const { formData } = location.state || {}; // Although checking formData is good, sometimes we might just want to pay? No, this is "Generate Letter" flow.
   const [status, setStatus] = useState<'idle' | 'verifying' | 'generating' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
-
-  // Currency state
-  const [userCurrency, setUserCurrency] = useState<CurrencyCode>('USD');
-  const [convertedAmount, setConvertedAmount] = useState<number>(0);
-  const [isDetecting, setIsDetecting] = useState(true);
-  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
   const [userEmail, setUserEmail] = useState('');
 
+  // Use the custom hook for all currency logic
+  const {
+    userCurrency,
+    setUserCurrency,
+    convertedAmount,
+    setConvertedAmount,
+    isDetecting,
+    exchangeRates,
+    formatCurrency,
+    detectUserCurrency
+  } = useCurrency();
+
+  // Initial Check and User Setup
   useEffect(() => {
     if (!formData) {
       navigate('/create');
@@ -65,13 +50,20 @@ export function Payment() {
       }
     });
 
-    // Detect user's location and currency
-    detectUserCurrency();
+    // Detect user's location and currency via hook
+    // The hook has its own useEffect, but we can call it explicitly if needed, 
+    // or rely on the hook's internal useEffect. 
+    // The hook's useEffect calls detectUserCurrency on mount. Use that.
+    // However, the hook is imported. It runs its effect.
+    // Wait, the hook source I saw (step 431) has `useEffect(() => { detectUserCurrency(); }, [])`.
+    // So distinct calls here might be redundant but harmless.
+
   }, [formData, navigate]);
 
   const generateLetterVerified = async (transactionId: string | null) => {
     setStatus('verifying');
     try {
+      // Refresh session first to ensure token is valid
       const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
       if (sessionError || !session) {
         throw new Error("Session expired. Please sign in again.");
@@ -81,7 +73,7 @@ export function Payment() {
         body: {
           transaction_id: transactionId,
           prompt_data: formData,
-          currency: userCurrency, // Use current state, might be default USD if too fast
+          currency: userCurrency,
           amount_paid: convertedAmount,
           base_amount_usd: BASE_AMOUNT_USD
         }
@@ -100,6 +92,29 @@ export function Payment() {
       setStatus('error');
     }
   };
+
+  // Flutterwave Config
+  // Ensure we use the User's email if available, else generic.
+  const config = {
+    public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY,
+    tx_ref: Date.now().toString(),
+    amount: convertedAmount,
+    currency: userCurrency,
+    payment_options: 'card,mobilemoney,ussd,banktransfer',
+    customer: {
+      email: userEmail || 'user@example.com',
+      phone_number: '',
+      name: 'Amour User',
+    },
+    customizations: {
+      title: 'Amour Letter Generation',
+      description: 'Generate your love letter',
+      logo: 'https://st2.depositphotos.com/4403291/7418/v/450/depositphotos_74189661-stock-illustration-online-shop-log.jpg',
+    },
+  };
+
+  // Initialize Flutterwave Hook
+  const handleFlutterwavePayment = useFlutterwave(config);
 
   const handleSuccess = async (response: any) => {
     closePaymentModal();
@@ -137,20 +152,6 @@ export function Payment() {
 
         {/* Currency Selection */}
         <div className="mb-6 bg-[#FAFAFA] rounded-xl p-4 border border-[#E5E5E5]">
-          {/* <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center">
-              <Globe className="w-4 h-4 text-[#666] mr-2" />
-              <span className="font-medium text-[#2A2A2A]">Payment Currency</span>
-            </div>
-            {isDetecting ? (
-              <span className="text-sm text-[#8B1E3F]">Detecting your location...</span>
-            ) : (
-              <span className="text-sm text-[#666]">
-                Detected: {SUPPORTED_CURRENCIES[userCurrency].country}
-              </span>
-            )}
-          </div> */}
-
           <div className="flex flex-col sm:flex-row items-center justify-between">
             <div className="text-sm">
               <span className="text-[#666] mr-2">Base amount:</span>
@@ -190,10 +191,9 @@ export function Payment() {
           )}
         </div>
 
-        {/* Rest of your component remains the same... */}
         {status === 'error' && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 flex flex-col items-start">
-            {/* Error UI */}
+          <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 text-sm text-center">
+            {errorMessage}
           </div>
         )}
 
@@ -217,10 +217,6 @@ export function Payment() {
             {isDetecting ? 'Detecting Currency...' : `Pay ${formatCurrency(convertedAmount, userCurrency)}`}
           </Button>
         )}
-
-        {/* <p className="text-center text-xs text-[#999] mt-6">
-          Secured by Flutterwave • Multiple currencies supported
-        </p> */}
       </motion.div>
     </div>
   );

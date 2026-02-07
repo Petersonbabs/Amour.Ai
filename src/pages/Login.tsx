@@ -9,7 +9,7 @@ export function Login() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             if (session) {
                 // No alerts found in Login.tsx based on view_file output. 
                 // However, I will check Create.tsx, Payment.tsx and Result.tsx.

@@ -12,7 +12,7 @@ export function Create() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isRecording } = useVoiceContext();
-  const currentStepBeforeLogin = sessionStorage.getItem("currentStepBeforeLogin");  
+  const currentStepBeforeLogin = sessionStorage.getItem("currentStepBeforeLogin");
   const [step, setStep] = useState(currentStepBeforeLogin ? parseInt(currentStepBeforeLogin) : 1);
   const [isGenerating, setIsGenerating] = useState(false);
   const [formData, setFormData] = useState(() => {
@@ -66,10 +66,14 @@ export function Create() {
       return;
     }
 
-    // Simulate AI generation delay or just move to payment
-    setTimeout(() => {
+    // Check for subscription status
+    const isSubscribed = session.user.user_metadata?.isSubscribed;
+
+    if (isSubscribed) {
+      navigate('/generating', { state: { formData } });
+    } else {
       navigate('/payment', { state: { formData } });
-    }, 1000);
+    }
   };
 
   const getPartnerLabel = () => {
