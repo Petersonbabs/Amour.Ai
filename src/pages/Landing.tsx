@@ -4,6 +4,7 @@ import { ArrowRight, Star, Heart, Sparkles } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 export function Landing() {
   return <div className="w-full">
+    
     {/* Hero Section */}
     <section className="relative min-h-[90vh] flex items-center justify-center px-6 overflow-hidden">
       {/* Background Elements */}
